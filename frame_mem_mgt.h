@@ -77,6 +77,8 @@ typedef map<uint32_t, MemOperationRecord *>			BlockSizeMap;
 typedef map<int32_t, BlockSizeMap *>				LineNoMap;
 typedef map<string, LineNoMap *>  					MemRecordMap;
 
+typedef set<uint8_t *>		MemAddressRecord;
+
 class CFrameMemMgt : public CObject
 {
 public:
@@ -93,6 +95,18 @@ public:
 	uint8_t *AllocBlock(int32_t nWantSize);
 	//回收内存块
 	void RecycleBlock(uint8_t *pMemBlock);
+	//添加块内存正在使用记录
+	uint8_t* AddBlkAddrRcd(uint8_t *pBlock);
+	//删除块内存正在使用记录
+	void DelBlkAddrRcd(uint8_t *pBlock);
+	//是否块内存有正在使用记录
+	bool HasBlkAddrRcd(uint8_t *pBlock);
+	//添加堆内存正在使用记录
+	uint8_t* AddHeapAddrRcd(uint8_t *pBlock);
+	//删除堆内存正在使用记录
+	void DelHeapAddrRcd(uint8_t *pBlock);
+	//是否有堆内存正在使用记录
+	bool HasHeapAddrRcd(uint8_t *pBlock);
 	//记录内存泄露信息
 	void RecordMemLeakInfo(uint8_t *pMemBlock);
 	//统计目前各个内存块的数量
@@ -103,6 +117,8 @@ public:
 	void RecordAllocInfo(const char*pFileName, int32_t nLineNo, uint32_t nBlockSize);
 	//统计释放信息
 	void RecordRecycleInfo(const char*pFileName, int32_t nLineNo, uint32_t nBlockSize);
+	//获取最大内存块大小
+	uint32_t GetMaxBlockSize();
 
 protected:
 	int32_t MallocMemBlock(int32_t nBytes, int32_t nWantCount);
@@ -121,6 +137,12 @@ protected:
 	//内存块泄露的个数
 	uint32_t			m_nMemLeakCount;
 
+	//内存块的使用记录
+	CriticalSection		m_stBlkAddrLock;
+	MemAddressRecord	m_stBlkAddrRcd;
+	CriticalSection		m_stHeapAddrLock;
+	MemAddressRecord	m_stHeapAddrRcd;
+
 	CriticalSection		m_stAllocMemRecordLock;
 	MemRecordMap		m_stAllocMemRecordMap;
 
@@ -132,16 +154,53 @@ protected:
 #define	g_FrameMemMgt							CSingleton<CFrameMemMgt>::GetInstance()
 #define	DESTROY_FRAMEMEMMGT_INSTANCE			CSingleton<CFrameMemMgt>::DestroyInstance
 
-#define MALLOC(size)	\
-	(g_FrameMemMgt.RecordAllocInfo(__FILE__, __LINE__, g_FrameMemMgt.GetBlockSize(size)),g_FrameMemMgt.AllocBlock(g_FrameMemMgt.GetBlockSize(size)))
+//获取最大内存大小
+#define MaxBlockSize		g_FrameMemMgt.GetMaxBlockSize()
 
-#define FREE(ptr)		\
-	if(ptr != NULL)		\
-	{	\
-		MemBlockHead *pHead = (MemBlockHead *)(ptr - sizeof(MemBlockHead));		\
-		g_FrameMemMgt.RecordRecycleInfo(__FILE__, __LINE__, pHead->m_nBlockSize);		\
-		g_FrameMemMgt.RecycleBlock(ptr);		\
-	}
+/*#define MALLOC(size)	\
+	((size > MaxBlockSize) ? (new(nothrow) uint8_t[size]) : \
+		(g_FrameMemMgt.RecordAllocInfo(__FILE__, __LINE__, g_FrameMemMgt.GetBlockSize(size)),	\
+		g_FrameMemMgt.AddBlkAddrRcd(g_FrameMemMgt.AllocBlock(g_FrameMemMgt.GetBlockSize(size)))))
+*/
+
+/*#define FREE(addr)		\
+	do{	\
+		uint8_t *ptr = reinterpret_cast<uint8_t *>(addr);	\
+		if((ptr) != NULL)		\
+		{	\
+			if(!g_FrameMemMgt.HasBlkAddrRcd(ptr))	\
+			{	\
+				delete ptr;	\
+			}	\
+			else	\
+			{	\
+				MemBlockHead *pHead = (MemBlockHead *)(ptr - sizeof(MemBlockHead));		\
+				g_FrameMemMgt.RecordRecycleInfo(__FILE__, __LINE__, pHead->m_nBlockSize);		\
+				g_FrameMemMgt.DelBlkAddrRcd(ptr);	\
+				g_FrameMemMgt.RecycleBlock(ptr);		\
+			}	\
+		}	\
+	}while(false)
+*/
+
+//增加引用计数
+int32_t IncReferCount(uint8_t *pMem);
+//减少引用计数
+int32_t DecReferCount(uint8_t *pMem);
+//获取引用计数
+int32_t GetReferCount(uint8_t *pMem);
+
+uint8_t* frame_malloc(uint32_t size, char *pFileName, int32_t nLineNo);
+
+void frame_free(void *addr, char *pFileName, int32_t nLineNo);
+
+#define MALLOC(size) 			frame_malloc(size, __FILE__, __LINE__)
+
+#define FREE(addr)				frame_free(addr, __FILE__, __LINE__)
+
+#define NEW(cls)				new(MALLOC(sizeof(cls))) cls()
+
+#define DELETE(obj)				FREE(obj)
 
 
 FRAME_NAMESPACE_END

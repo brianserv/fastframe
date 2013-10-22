@@ -7,6 +7,7 @@
 
 #include "common/common_errordef.h"
 #include "frame_mem_mgt.h"
+#include <string.h>
 
 FRAME_NAMESPACE_BEGIN
 
@@ -159,6 +160,85 @@ void CFrameMemMgt::RecycleBlock(uint8_t *pMemBlock)
 	}
 }
 
+//添加块内存正在使用记录
+uint8_t* CFrameMemMgt::AddBlkAddrRcd(uint8_t *pBlock)
+{
+	MUTEX_GUARD(lock, m_stBlkAddrLock);
+	if(pBlock != NULL)
+	{
+		if(m_stBlkAddrRcd.count(pBlock) > 0)
+		{
+			//todo : trouble
+		}
+		else
+		{
+			m_stBlkAddrRcd.insert(pBlock);
+		}
+	}
+
+	return pBlock;
+}
+
+//删除块内存正在使用记录
+void CFrameMemMgt::DelBlkAddrRcd(uint8_t *pBlock)
+{
+	MUTEX_GUARD(lock, m_stBlkAddrLock);
+	if(pBlock != NULL)
+	{
+		if(m_stBlkAddrRcd.count(pBlock) > 0)
+		{
+			m_stBlkAddrRcd.erase(pBlock);
+		}
+	}
+}
+
+//是否块内存有正在使用记录
+bool CFrameMemMgt::HasBlkAddrRcd(uint8_t *pBlock)
+{
+	MUTEX_GUARD(lock, m_stBlkAddrLock);
+	return m_stBlkAddrRcd.count(pBlock) > 0;
+}
+
+//添加堆内存正在使用记录
+uint8_t* CFrameMemMgt::AddHeapAddrRcd(uint8_t *pBlock)
+{
+	MUTEX_GUARD(lock, m_stHeapAddrLock);
+	if(pBlock != NULL)
+	{
+		if(m_stHeapAddrRcd.count(pBlock) > 0)
+		{
+			//todo : trouble
+		}
+		else
+		{
+			m_stHeapAddrRcd.insert(pBlock);
+		}
+	}
+
+	return pBlock;
+}
+
+//删除堆内存正在使用记录
+void CFrameMemMgt::DelHeapAddrRcd(uint8_t *pBlock)
+{
+	MUTEX_GUARD(lock, m_stHeapAddrLock);
+	if(pBlock != NULL)
+	{
+		if(m_stHeapAddrRcd.count(pBlock) > 0)
+		{
+			m_stHeapAddrRcd.erase(pBlock);
+		}
+		delete pBlock;
+	}
+}
+
+//是否有堆内存正在使用记录
+bool CFrameMemMgt::HasHeapAddrRcd(uint8_t *pBlock)
+{
+	MUTEX_GUARD(lock, m_stHeapAddrLock);
+	return m_stHeapAddrRcd.count(pBlock) > 0;
+}
+
 //记录内存泄露信息
 void CFrameMemMgt::RecordMemLeakInfo(uint8_t *pMemBlock)
 {
@@ -168,6 +248,7 @@ void CFrameMemMgt::RecordMemLeakInfo(uint8_t *pMemBlock)
 	}
 }
 
+#include <stdio.h>
 //统计目前各个内存块的数量
 void CFrameMemMgt::PrintMemBlockInfo()
 {
@@ -204,7 +285,8 @@ void CFrameMemMgt::PrintMemBlockInfo()
 	sprintf(strMemBlockInfo + nOffset, ", m_nMemLeakCount = %d}", m_nMemLeakCount);
 	nOffset = strlen(strMemBlockInfo);
 
-	g_FrameLogEngine.WriteMainLog(enmLogLevel_Notice, "%s\n", strMemBlockInfo);
+	//g_FrameLogEngine.WriteMainLog(enmLogLevel_Notice, "%s\n", strMemBlockInfo);
+	printf("%s\n", strMemBlockInfo);
 
 	//内存申请记录
 	nOffset = 0;
@@ -241,7 +323,8 @@ void CFrameMemMgt::PrintMemBlockInfo()
 	sprintf(strMemBlockInfo + nOffset, "}");
 	nOffset = strlen(strMemBlockInfo);
 
-	g_FrameLogEngine.WriteMainLog(enmLogLevel_Notice, "%s\n", strMemBlockInfo);
+	//g_FrameLogEngine.WriteMainLog(enmLogLevel_Notice, "%s\n", strMemBlockInfo);
+	printf("%s\n", strMemBlockInfo);
 
 	//内存释放记录
 	nOffset = 0;
@@ -278,7 +361,8 @@ void CFrameMemMgt::PrintMemBlockInfo()
 	sprintf(strMemBlockInfo + nOffset, "}");
 	nOffset = strlen(strMemBlockInfo);
 
-	g_FrameLogEngine.WriteMainLog(enmLogLevel_Notice, "%s\n", strMemBlockInfo);
+	//g_FrameLogEngine.WriteMainLog(enmLogLevel_Notice, "%s\n", strMemBlockInfo);
+	printf("%s\n", strMemBlockInfo);
 }
 
 int32_t CFrameMemMgt::GetBlockSize(int32_t nWantSize)
@@ -299,7 +383,7 @@ int32_t CFrameMemMgt::GetBlockSize(int32_t nWantSize)
 //统计申请信息
 void CFrameMemMgt::RecordAllocInfo(const char*pFileName, int32_t nLineNo, uint32_t nBlockSize)
 {
-	if(pFileName == NULL)
+	//if(pFileName == NULL)
 	{
 		return;
 	}
@@ -390,7 +474,7 @@ void CFrameMemMgt::RecordAllocInfo(const char*pFileName, int32_t nLineNo, uint32
 //统计释放信息
 void CFrameMemMgt::RecordRecycleInfo(const char*pFileName, int32_t nLineNo, uint32_t nBlockSize)
 {
-	if(pFileName == NULL)
+	//if(pFileName == NULL)
 	{
 		return;
 	}
@@ -476,6 +560,12 @@ void CFrameMemMgt::RecordRecycleInfo(const char*pFileName, int32_t nLineNo, uint
 		pLineNoMap->insert(make_pair(nLineNo, pBlockSizeMap));
 		m_stRecycleMemRecordMap[string(pFileName)] = pLineNoMap;
 	}
+}
+
+//获取最大内存块大小
+uint32_t CFrameMemMgt::GetMaxBlockSize()
+{
+	return m_nMaxBlockSize;
 }
 
 int32_t CFrameMemMgt::MallocMemBlock(int32_t nBytes, int32_t nWantCount)
@@ -580,6 +670,103 @@ MemBlockInfo *CFrameMemMgt::GetMemBlockInfo(int32_t nIndex)
 
 	return m_stMemInfoTable[nIndex];
 }
+
+//增加引用计数
+int32_t IncReferCount(uint8_t *pMem)
+{
+	if(pMem == NULL)
+	{
+		return -1;
+	}
+	if(!g_FrameMemMgt.HasBlkAddrRcd(pMem))
+	{
+		return -1;
+	}
+
+	MemBlockHead *pHead = (MemBlockHead *)(pMem - sizeof(MemBlockHead));
+	return ++pHead->m_nReferCount;
+}
+
+//减少引用计数
+int32_t DecReferCount(uint8_t *pMem)
+{
+	if(pMem == NULL)
+	{
+		return -1;
+	}
+	if(!g_FrameMemMgt.HasBlkAddrRcd(pMem))
+	{
+		return -1;
+	}
+
+	MemBlockHead *pHead = (MemBlockHead *)(pMem - sizeof(MemBlockHead));
+	return --pHead->m_nReferCount;
+}
+
+//获取引用计数
+int32_t GetReferCount(uint8_t *pMem)
+{
+	if(pMem == NULL)
+	{
+		return -1;
+	}
+	if(!g_FrameMemMgt.HasBlkAddrRcd(pMem))
+	{
+		return -1;
+	}
+
+	MemBlockHead *pHead = (MemBlockHead *)(pMem - sizeof(MemBlockHead));
+	return pHead->m_nReferCount;
+}
+
+#include <iostream>
+using namespace std;
+
+uint8_t* frame_malloc(uint32_t size, char *pFileName, int32_t nLineNo)
+{
+	//cout << "malloc:" << pFileName << " line: " << nLineNo << endl << flush;
+	uint8_t *pMem = NULL;
+	if(size > MaxBlockSize)
+	{
+		pMem = new(nothrow) uint8_t[size];
+		g_FrameMemMgt.AddHeapAddrRcd(pMem);
+	}
+	else
+	{
+		int32_t nBlockSize = g_FrameMemMgt.GetBlockSize(size);
+		pMem = g_FrameMemMgt.AllocBlock(nBlockSize);
+		g_FrameMemMgt.AddBlkAddrRcd(pMem);
+		g_FrameMemMgt.RecordAllocInfo(pFileName, nLineNo, nBlockSize);
+	}
+	//cout << "malloc : " << hex << (unsigned)pMem << dec << " --- size=" << size << endl << flush;
+	return pMem;
+}
+
+void frame_free(void *addr, char *pFileName, int32_t nLineNo)
+{
+//	cout << "@@@@free:" << pFileName << " line: " << nLineNo << endl << flush;
+	uint8_t *ptr = (uint8_t *)(addr);
+	if((ptr) != NULL)
+	{
+		//cout << "free : " << hex << (unsigned)addr << endl << flush;
+		if(g_FrameMemMgt.HasHeapAddrRcd(ptr))
+		{
+			g_FrameMemMgt.DelHeapAddrRcd(ptr);
+		}
+		else if(g_FrameMemMgt.HasBlkAddrRcd(ptr))
+		{
+			MemBlockHead *pHead = (MemBlockHead *)(ptr - sizeof(MemBlockHead));
+			g_FrameMemMgt.RecordRecycleInfo(pFileName, nLineNo, pHead->m_nBlockSize);
+			g_FrameMemMgt.DelBlkAddrRcd(ptr);
+			g_FrameMemMgt.RecycleBlock(ptr);
+		}
+		else
+		{
+			cout << "######: " << pFileName << nLineNo << endl << flush;
+		}
+	}
+}
+
 
 FRAME_NAMESPACE_END
 
