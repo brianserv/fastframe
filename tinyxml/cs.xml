@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Config>
+  <DebugLevel>1</DebugLevel>
+  <Log>
+    <BufferSize>512</BufferSize>
+    <ErrLog>log/err.log</ErrLog>
+    <SysLog>log/as.log</SysLog>
+  </Log>
+  <Server>
+    <Port>15610</Port>
+    <BackLog>511</BackLog>
+  </Server>
+  <ShareMemory>
+    <ShMFile>conf/share_memory</ShMFile>
+    <ShMSize>671088640</ShMSize>
+  </ShareMemory>
+  <Block>
+    <XmlDir>conf/block_xml</XmlDir>
+  </Block>
+</Config>

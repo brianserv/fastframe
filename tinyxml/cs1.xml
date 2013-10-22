@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Config>
+  <Debug level="1"></Debug>
+  <Log BufferSize="512" ErrLog="log/err.log" SysLog="log/as.log"></Log>
+  <Server Port="15610" BackLog="511"></Server>
+  <ShareMemory ShMFile="conf/share_memory" ShMSize="671088640"></ShareMemory>
+  <Block XmlDir="conf/block_xml"></Block>
+</Config>
