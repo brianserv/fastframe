@@ -383,7 +383,7 @@ int32_t CFrameMemMgt::GetBlockSize(int32_t nWantSize)
 //统计申请信息
 void CFrameMemMgt::RecordAllocInfo(const char*pFileName, int32_t nLineNo, uint32_t nBlockSize)
 {
-	//if(pFileName == NULL)
+	if(pFileName == NULL)
 	{
 		return;
 	}
@@ -474,7 +474,7 @@ void CFrameMemMgt::RecordAllocInfo(const char*pFileName, int32_t nLineNo, uint32
 //统计释放信息
 void CFrameMemMgt::RecordRecycleInfo(const char*pFileName, int32_t nLineNo, uint32_t nBlockSize)
 {
-	//if(pFileName == NULL)
+	if(pFileName == NULL)
 	{
 		return;
 	}

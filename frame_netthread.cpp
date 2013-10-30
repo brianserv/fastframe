@@ -19,6 +19,7 @@
 #include "frame_mem_mgt.h"
 #include "frame_eventid.h"
 #include "frame_sockettimer.h"
+#include "frame_msgevent_mgt.h"
 
 #ifndef WIN32
 #include<cstring>
@@ -122,6 +123,44 @@ int32_t CFrameNetThread::SendMessage()
 
 	uint8_t *pBufCS = &pNetPacket->m_pNetPacket[sizeof(ConnInfo)];
 	uint32_t nBufSizeCS = pNetPacket->m_nNetPacketLen/* - sizeof(ConnInfo)*/;
+
+	uint32_t nOffset = 0;
+	MessageHeadCS stMsgHead;
+	ret = stMsgHead.MessageDecode(pBufCS, nBufSizeCS, nOffset);
+	if(ret < 0)
+	{
+		FREE((uint8_t *)pNetPacket);
+		return E_UNKNOWN;
+	}
+
+	if(stMsgHead.nMessageID == 18)
+	{
+		char arrTimeString[1024];
+		GetTimeString(arrTimeString);
+
+		uint32_t offset = 0;
+		char szLog[enmMaxLogInfoLength];
+		szLog[0] = 0;
+
+		sprintf(szLog + offset, "{SendTime : %s} MessageHeadCS=", arrTimeString);
+		offset = (uint32_t)strlen(szLog);
+		stMsgHead.Dump(szLog, enmMaxLogInfoLength, offset);
+
+		uint8_t *pBody = pBufCS + nOffset;
+		uint32_t nUserID = *(uint32_t *)pBody;
+		uint8_t nNameLen = *(uint8_t *)(pBody + 5);
+		uint8_t nChatLen = *(uint8_t *)(pBody + 6);
+		char arrContent[1024];
+		memcpy(arrContent, pBody + 7 + nNameLen, nChatLen);
+		arrContent[nChatLen] = '\0';
+		sprintf(szLog + offset, " MessageBody={userid[%u] send world chat content[%s]}",
+				nUserID, arrContent);
+		offset = (uint32_t)strlen(szLog);
+
+		WRITE_MAIN_LOG(enmLogLevel_Notice, "%s\n", szLog);
+	}
+
+
 
 	int32_t nSendBytes = 0;
 	for(int32_t i = 0; i < nSocketCount; ++i)

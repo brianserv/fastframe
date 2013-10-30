@@ -12,6 +12,7 @@
 #include "frame_configmgt.h"
 //#include "frame_connection_mgt.h"
 #include "frame_mem_mgt.h"
+#include "frame_msgevent_mgt.h"
 
 FRAME_NAMESPACE_BEGIN
 
@@ -216,7 +217,7 @@ int32_t COutsideSocket::MakeMessage()
 			int32_t nRet = stMsgHead.MessageDecode(pPacketHead, m_nPacketOffset, nOffset);
 			if(nRet < 0)
 			{
-				FREE((uint8_t *)m_pPacket);//g_FrameMemMgt.RecycleBlock((uint8_t *)m_pPacket);
+				FREE((uint8_t *)m_pPacket);
 				m_pPacket = NULL;
 				m_nPacketOffset = 0;
 				m_nCurPacketSize = 0;

@@ -27,6 +27,7 @@
 #include "common/common_errordef.h"
 #include "common/common_version.h"
 #include <time.h>
+#include <sys/time.h>
 
 
 
@@ -996,4 +997,19 @@ char *inet_ntoa_f(uint32_t ip)
 pid_t gettid()
 {
 	return syscall(SYS_gettid);
+}
+
+int32_t GetTimeString(char arrTimeString[])
+{
+	struct timeval tv;
+ 	gettimeofday(&tv, NULL);
+	struct tm now = *localtime(&tv.tv_sec);
+
+	int32_t nRetLen = sprintf(arrTimeString, "%04d/%02d/%02d %02d:%02d:%02d.%03ld",
+			now.tm_year + 1900, now.tm_mon + 1, now.tm_mday, now.tm_hour,
+			now.tm_min, now.tm_sec, tv.tv_usec / 1000);
+
+	arrTimeString[nRetLen] = '\0';
+
+	return nRetLen;
 }

@@ -20,6 +20,9 @@ enum
 	enmMaxProbabilityCount		= 1024,
 };
 
+//最大的时间格式化字符串长度
+#define MAX_FORMAT_TIMESTRING_LEN		128
+
 #ifdef WIN32
 #define snprintf _snprintf
 //int snprintf(char *buffer, int count, const char *format, ...);	//the type of count according to MSDN _snprintf is size_t(unsignde), while "man snprintf" gives int. We keep the func consistent with the behavior on Linux
@@ -120,6 +123,9 @@ extern "C"
 	char *inet_ntoa_f(uint32_t ip);
 
 	pid_t gettid();
+
+	//获取当前时间的格式化字符串
+	int32_t GetTimeString(char arrTimeString[]);
 
 #if defined(DEBUG) || defined(_DEBUG) || defined(_DEBUG_)
 #define 	DEBUG_CODE(debug_code)	{debug_code}
