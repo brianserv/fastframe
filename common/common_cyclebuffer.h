@@ -9,6 +9,8 @@
 #define COMMON_CYCLEBUFFER_H_
 
 #include "common_mutex.h"
+#include <stdlib.h>
+#include <string.h>
 
 template<int32_t SIZE>
 class CycleBuffer
@@ -17,11 +19,61 @@ public:
 	CycleBuffer()
 	{
 		Reset();
+		m_pBuf = (uint8_t *)malloc(SIZE);
+		m_nBufSize = SIZE;
 	}
 
 	virtual ~CycleBuffer()
 	{
+		if(m_pBuf != NULL)
+		{
+			delete m_pBuf;
+		}
+	}
 
+	int32_t Grow(int32_t nSize)
+	{
+		if(nSize <= 0)
+		{
+			return 0;
+		}
+
+		MUTEX_GUARD(lock, m_stLock);
+		uint8_t *pMem = (uint8_t *)malloc(nSize + m_nBufSize);
+		if(pMem == NULL)
+		{
+			return 0;
+		}
+
+		int32_t nWriteIndex = 0;
+		do
+		{
+			int32_t nReadBytes = Read(pMem + nWriteIndex, 4096);
+			if(nReadBytes <= 0)
+			{
+				break;
+			}
+
+			nWriteIndex += nReadBytes;
+		}while(m_nDataSize > 0);
+
+		if(m_nDataSize > 0)
+		{
+			return -1;
+		}
+
+		if(m_pBuf != NULL)
+		{
+			delete m_pBuf;
+		}
+		m_pBuf = pMem;
+
+		m_nReadIndex = 0;
+		m_nWriteIndex = nWriteIndex;
+		m_nDataSize = nWriteIndex;
+		m_nBufSize += nSize;
+
+		return nSize;
 	}
 
 	//写到写列表的头部内存
@@ -34,14 +86,18 @@ public:
 
 		MUTEX_GUARD(lock, m_stLock);
 		//剩余空间不足
-		if(m_nDataSize + nDataSize > SIZE)
+		if(m_nDataSize + nDataSize > m_nBufSize)
 		{
-			return -1;
+			if(Grow((m_nDataSize + nDataSize) - m_nBufSize) <= 0)
+			{
+				return 0;
+			}
+			//return -1;
 		}
 
 		if(m_nWriteIndex < m_nReadIndex)
 		{
-			memcpy(&m_arrBuf[m_nReadIndex - nDataSize], pBuf, nDataSize);
+			memcpy(&m_pBuf[m_nReadIndex - nDataSize], pBuf, nDataSize);
 			m_nReadIndex -= nDataSize;
 		}
 		//出现这中情况一般都是初始值的时候
@@ -55,10 +111,10 @@ public:
 			if(nLeftDataSize < nDataSize)
 			{
 				int32_t nTailDataSize = nDataSize - nLeftDataSize;
-				int32_t nWriteIndex = SIZE - nTailDataSize;
-				memcpy(&m_arrBuf[nWriteIndex], pBuf, nTailDataSize);
-				memcpy(&m_arrBuf[0], pBuf + nTailDataSize, nLeftDataSize);
-				m_nWriteIndex = nWriteIndex;
+				int32_t nWriteIndex = m_nBufSize - nTailDataSize;
+				memcpy(&m_pBuf[nWriteIndex], pBuf, nTailDataSize);
+				memcpy(&m_pBuf[0], pBuf + nTailDataSize, nLeftDataSize);
+				m_nReadIndex = nWriteIndex;
 			}
 			else
 			{
@@ -67,7 +123,7 @@ public:
 					return 0;
 				}
 
-				memcpy(&m_arrBuf[m_nReadIndex - nDataSize], pBuf, nDataSize);
+				memcpy(&m_pBuf[m_nReadIndex - nDataSize], pBuf, nDataSize);
 				m_nReadIndex -= nDataSize;
 			}
 		}
@@ -87,28 +143,32 @@ public:
 
 		MUTEX_GUARD(lock, m_stLock);
 		//剩余空间不足
-		if(m_nDataSize + nDataSize > SIZE)
+		if(m_nDataSize + nDataSize > m_nBufSize)
 		{
-			return -1;
+			if(Grow((m_nDataSize + nDataSize) - m_nBufSize) <= 0)
+			{
+				return 0;
+			}
+			//return -1;
 		}
 
 		if(m_nWriteIndex < m_nReadIndex)
 		{
-			memcpy(&m_arrBuf[m_nWriteIndex], pBuf, nDataSize);
+			memcpy(&m_pBuf[m_nWriteIndex], pBuf, nDataSize);
 			m_nWriteIndex += nDataSize;
 		}
 		else
 		{
-			int32_t nLeftDataSize = SIZE - m_nWriteIndex;
+			int32_t nLeftDataSize = m_nBufSize - m_nWriteIndex;
 			if(nLeftDataSize < nDataSize)
 			{
-				memcpy(&m_arrBuf[m_nWriteIndex], pBuf, nLeftDataSize);
-				memcpy(&m_arrBuf[0], pBuf + nLeftDataSize, nDataSize - nLeftDataSize);
+				memcpy(&m_pBuf[m_nWriteIndex], pBuf, nLeftDataSize);
+				memcpy(&m_pBuf[0], pBuf + nLeftDataSize, nDataSize - nLeftDataSize);
 				m_nWriteIndex = nDataSize - nLeftDataSize;
 			}
 			else
 			{
-				memcpy(&m_arrBuf[m_nWriteIndex], pBuf, nDataSize);
+				memcpy(&m_pBuf[m_nWriteIndex], pBuf, nDataSize);
 				m_nWriteIndex += nDataSize;
 			}
 		}
@@ -136,7 +196,7 @@ public:
 				return 0;
 			}
 
-			memcpy(pBuf, &m_arrBuf[m_nWriteIndex - nDataSize], nDataSize);
+			memcpy(pBuf, &m_pBuf[m_nWriteIndex - nDataSize], nDataSize);
 			m_nWriteIndex -= nDataSize;
 		}
 		else if(m_nReadIndex == m_nWriteIndex)
@@ -147,15 +207,15 @@ public:
 		{
 			if(m_nWriteIndex - nWantSize >= 0)
 			{
-				memcpy(pBuf, &m_arrBuf[m_nWriteIndex - nWantSize], nWantSize);
+				memcpy(pBuf, &m_pBuf[m_nWriteIndex - nWantSize], nWantSize);
 				m_nWriteIndex -= nWantSize;
 			}
 			else
 			{
 				int32_t nTailDataSize = nDataSize - m_nWriteIndex;
-				int32_t nWriteIndex = SIZE - nTailDataSize;
-				memcpy(pBuf, &m_arrBuf[nWriteIndex], nTailDataSize);
-				memcpy(&pBuf[nTailDataSize], &m_arrBuf[0], m_nWriteIndex);
+				int32_t nWriteIndex = m_nBufSize - nTailDataSize;
+				memcpy(pBuf, &m_pBuf[nWriteIndex], nTailDataSize);
+				memcpy(&pBuf[nTailDataSize], &m_pBuf[0], m_nWriteIndex);
 				m_nWriteIndex = nWriteIndex;
 			}
 		}
@@ -183,21 +243,21 @@ public:
 
 		if(m_nReadIndex < m_nWriteIndex)
 		{
-			memcpy(pBuf, &m_arrBuf[m_nReadIndex], nDataSize);
+			memcpy(pBuf, &m_pBuf[m_nReadIndex], nDataSize);
 			m_nReadIndex += nDataSize;
 		}
 		else
 		{
-			int32_t nLeftDataSize = SIZE - m_nReadIndex;
+			int32_t nLeftDataSize = m_nBufSize - m_nReadIndex;
 			if(nLeftDataSize < nDataSize)
 			{
-				memcpy(pBuf, &m_arrBuf[m_nReadIndex], nLeftDataSize);
-				memcpy(pBuf + nLeftDataSize, &m_arrBuf[0], nDataSize - nLeftDataSize);
+				memcpy(pBuf, &m_pBuf[m_nReadIndex], nLeftDataSize);
+				memcpy(pBuf + nLeftDataSize, &m_pBuf[0], nDataSize - nLeftDataSize);
 				m_nReadIndex = nDataSize - nLeftDataSize;
 			}
 			else
 			{
-				memcpy(pBuf, &m_arrBuf[m_nReadIndex], nDataSize);
+				memcpy(pBuf, &m_pBuf[m_nReadIndex], nDataSize);
 				m_nReadIndex += nDataSize;
 			}
 		}
@@ -220,7 +280,7 @@ public:
 		int32_t nDataSize = ((m_nDataSize < nWantSize) ? m_nDataSize : nWantSize);
 		if(m_nReadIndex < m_nWriteIndex)
 		{
-			memcpy(pBuf, &m_arrBuf[m_nReadIndex], nDataSize);
+			memcpy(pBuf, &m_pBuf[m_nReadIndex], nDataSize);
 		}
 		else if(m_nReadIndex == m_nWriteIndex)
 		{
@@ -228,15 +288,15 @@ public:
 		}
 		else
 		{
-			int32_t nLeftDataSize = SIZE - m_nReadIndex;
+			int32_t nLeftDataSize = m_nBufSize - m_nReadIndex;
 			if(nLeftDataSize < nDataSize)
 			{
-				memcpy(pBuf, &m_arrBuf[m_nReadIndex], nLeftDataSize);
-				memcpy(pBuf + nLeftDataSize, &m_arrBuf[0], nDataSize - nLeftDataSize);
+				memcpy(pBuf, &m_pBuf[m_nReadIndex], nLeftDataSize);
+				memcpy(pBuf + nLeftDataSize, &m_pBuf[0], nDataSize - nLeftDataSize);
 			}
 			else
 			{
-				memcpy(pBuf, &m_arrBuf[m_nReadIndex], nDataSize);
+				memcpy(pBuf, &m_pBuf[m_nReadIndex], nDataSize);
 			}
 		}
 
@@ -249,7 +309,7 @@ public:
 		m_nReadIndex = 0;
 		m_nWriteIndex = 0;
 		m_nDataSize = 0;
-		memset(m_arrBuf, 0, sizeof(m_arrBuf));
+		//memset(m_pBuf, 0, m_nBufSize);
 	}
 
 	int32_t Size()
@@ -260,13 +320,14 @@ public:
 
 	int32_t Capatity()
 	{
-		return SIZE;
+		MUTEX_GUARD(lock, m_stLock);
+		return m_nBufSize;
 	}
 
 	int32_t Space()
 	{
 		MUTEX_GUARD(lock, m_stLock);
-		return SIZE - m_nDataSize;
+		return m_nBufSize - m_nDataSize;
 	}
 
 protected:
@@ -274,7 +335,10 @@ protected:
 	volatile int32_t		m_nReadIndex;
 	volatile int32_t		m_nWriteIndex;
 	volatile int32_t		m_nDataSize;
-	uint8_t					m_arrBuf[SIZE];
+//	uint8_t					m_arrBuf[SIZE];
+	volatile int32_t		m_nBufSize;
+	uint8_t					*m_pBuf;
 };
+
 
 #endif /* COMMON_CYCLEBUFFER_H_ */
